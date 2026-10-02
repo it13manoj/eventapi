@@ -100,9 +100,16 @@ exports.findByUserId = async (req, res) => {
         const event = await sequelize.query(
             `
            SELECT
-    tms.assignedAt AS presentToDate,
+    tms.id,
+    tms.event_id,
+    tms.status AS assign_status,
     tms.assignedAt,
+    tms.assignedAt AS presentToDate,
     e.nodb AS presentFromDate,
+    e.doe AS eventDate,
+    e.c_name AS eventName,
+    e.vanus AS venue,
+    e.v_location AS venueLocation,
     u.sifting_type
 FROM users u
 INNER JOIN team_assign_users tms
@@ -110,7 +117,7 @@ INNER JOIN team_assign_users tms
 INNER JOIN events e 
     ON e.id = tms.event_id
 WHERE tms.user_id = :userId
-ORDER BY u.name DESC;
+ORDER BY tms.assignedAt DESC;
             `,
             {
                 replacements: { userId: id },

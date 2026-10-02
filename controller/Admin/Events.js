@@ -486,8 +486,7 @@ exports.bookedItemsInStocked = async (req, res) => {
 
 exports.invoiceItems = async (req, res) => {
     try {
-
-        const result = await sequelize.query(
+        const eventRows = await sequelize.query(
             `
             SELECT 
                 e.id,
@@ -496,6 +495,8 @@ exports.invoiceItems = async (req, res) => {
                 e.doe,
                 e.vanus,
                 e.v_location,
+                e.amount AS event_base_amount,
+                e.status AS event_status,
                 be.id AS booked_event_id,
                 be.categories_id,
                 be.categories_name,
@@ -517,60 +518,163 @@ exports.invoiceItems = async (req, res) => {
                 be.created_at,
                 be.updated_at
             FROM events e
-            INNER JOIN booked_events be
+            LEFT JOIN booked_events be
                 ON be.event_id = e.id
-            WHERE e.status = "3" order by e.id DESC
+            WHERE e.status != "4" AND e.status != "Cancelled"
+            ORDER BY e.id DESC
             `,
             {
                 type: QueryTypes.SELECT,
             }
         );
 
-        const invoices = Object.values(
-            result.reduce((acc, row) => {
+        // Fetch vehicle movements with vehicle details
+        const vehicleRows = await sequelize.query(
+            `
+            SELECT 
+                vm.id AS movement_id,
+                vm.event_id,
+                vm.type AS vehicle_type,
+                vm.agent_name,
+                vm.vehicle_id,
+                vm.fuel_type,
+                vm.fuel_quantity,
+                vm.fuel_amount,
+                vm.status AS movement_status,
+                v.name AS vehicle_name,
+                v.vehicle_number,
+                v.owner_agency,
+                v.ownershiptype,
+                v.commission
+            FROM vehicle_movements vm
+            LEFT JOIN vehicles v ON v.id = vm.vehicle_id
+            ORDER BY vm.id ASC
+            `,
+            {
+                type: QueryTypes.SELECT,
+            }
+        );
 
-                if (!acc[row.id]) {
-                    acc[row.id] = {
-                        id: `INV-${row.id}`,
-                        customer: row.c_name,
-                        date: row.nodb,
-                        eventDate: row.doe,
-                        mobile: "NA",
-                        address: row.v_location,
-                        amount: 0,
-                        status: "Paid",
-                        items: []
-                    };
-                }
+        // Fetch payment histories to compute paid and remaining balances
+        const paymentRows = await sequelize.query(
+            `
+            SELECT 
+                event_id, 
+                SUM(price) AS total_paid
+            FROM event_pay_histories
+            GROUP BY event_id
+            `,
+            {
+                type: QueryTypes.SELECT,
+            }
+        );
 
-                const itemAmount =
-                    (Number(row?.vprice || 0) + Number(row?.hprice || 0)) +
-                    (Number(row?.price || 0) );
+        const paidMap = {};
+        paymentRows.forEach(p => {
+            paidMap[p.event_id] = Number(p.total_paid || 0);
+        });
 
-                acc[row.id].items.push({
+        // Group vehicles by event_id
+        const vehicleMap = {};
+        vehicleRows.forEach(vm => {
+            if (!vehicleMap[vm.event_id]) {
+                vehicleMap[vm.event_id] = [];
+            }
+            const fuelAmount = Number(vm.fuel_amount || 0);
+            const commission = Number(vm.commission || 0);
+            vehicleMap[vm.event_id].push({
+                movementId: vm.movement_id,
+                vehicleId: vm.vehicle_id,
+                vehicleName: vm.vehicle_name || "Vehicle",
+                vehicleNumber: vm.vehicle_number || "-",
+                ownerAgency: vm.owner_agency || vm.agent_name || "Owner",
+                type: vm.vehicle_type || "OWNER",
+                fuelType: vm.fuel_type || "-",
+                fuelQuantity: Number(vm.fuel_quantity || 0),
+                fuelAmount: fuelAmount,
+                commission: commission,
+                totalCost: fuelAmount + commission,
+                status: vm.movement_status || "ASSIGNED"
+            });
+        });
+
+        const invoiceMap = {};
+
+        eventRows.forEach(row => {
+            if (!invoiceMap[row.id]) {
+                const assignedVehicles = vehicleMap[row.id] || [];
+                const vehiclesSubtotal = assignedVehicles.reduce((sum, v) => sum + v.totalCost, 0);
+                const paid = paidMap[row.id] || 0;
+
+                invoiceMap[row.id] = {
+                    id: `INV-${row.id}`,
+                    eventId: row.id,
+                    customer: row.c_name,
+                    date: row.nodb,
+                    eventDate: row.doe,
+                    venue: row.vanus || "Venue",
+                    mobile: "NA",
+                    address: row.v_location || row.vanus || "Venue",
+                    itemsSubtotal: 0,
+                    vehiclesSubtotal: vehiclesSubtotal,
+                    amount: vehiclesSubtotal,
+                    paidAmount: paid,
+                    unpaidAmount: 0,
+                    status: "Unpaid",
+                    items: [],
+                    vehicles: assignedVehicles
+                };
+            }
+
+            if (row.booked_event_id) {
+                const baseAmount = row.vprice && Number(row.vprice) > 0
+                    ? Number(row.vprice)
+                    : row.hprice && Number(row.hprice) > 0
+                        ? Number(row.hprice)
+                        : Number(row.price || 0);
+
+                const qty = row.verticalUnit
+                    ? Number(row.verticalPcs || 0)
+                    : row.horizontalUnit
+                        ? Number(row.horizontalPcs || 0)
+                        : Number(row.qt || 0);
+
+                const lineTotal = baseAmount;
+
+                invoiceMap[row.id].items.push({
                     bookedEventId: row.booked_event_id,
                     categoryId: row.categories_id,
                     categoryName: row.categories_name,
                     subCategoryId: row.subCategories_id,
                     subCategoryName: row.subCategories_name,
-                    qty: row.qt,
-                    vprice:row.vprice,
-                    hprice:row.hprice,
-                    sprice:row.price,
-                    horizontalPcs:row.horizontalPcs,
-                    verticalPcs:row.verticalPcs,
+                    qty: qty || Number(row.qt || 1),
+                    vprice: row.vprice,
+                    hprice: row.hprice,
+                    sprice: row.price,
+                    horizontalPcs: row.horizontalPcs,
+                    verticalPcs: row.verticalPcs,
                     vertical: row.vertical,
                     horizontal: row.horizontal,
                     verticalUnit: row.verticalUnit,
                     horizontalUnit: row.horizontalUnit,
-                    
+                    rate: baseAmount,
+                    lineTotal: lineTotal
                 });
-                
-                acc[row.id].amount += itemAmount;
 
-                return acc;
-            }, {})
-        );
+                invoiceMap[row.id].itemsSubtotal += lineTotal;
+                invoiceMap[row.id].amount += lineTotal;
+            }
+        });
+
+        const invoices = Object.values(invoiceMap).map(inv => {
+            inv.unpaidAmount = Math.max(0, inv.amount - inv.paidAmount);
+            inv.status = inv.unpaidAmount <= 0 && inv.amount > 0
+                ? "Paid"
+                : inv.paidAmount > 0
+                    ? "Partial"
+                    : "Unpaid";
+            return inv;
+        });
 
         res.send(
             SUCCESS("Successfully Invoice", invoices)

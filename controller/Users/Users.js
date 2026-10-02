@@ -39,7 +39,8 @@ exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
         const user = await User.findOne({
-            where: { email: email }
+            where: { email: email },
+            include: [{ model: Role, as: "role", attributes: ["id", "role_name"] }]
         });
 
         if (!user) {
@@ -49,8 +50,9 @@ exports.login = async (req, res) => {
         if (!isMatch) {
             return res.send(ERROR("Invalid password"));
         }
+        const roleName = user.role?.role_name || (user.role_id === 2 ? "ADMIN" : "USERS");
         const token = jwt.sign(
-            { id: user.id, email: user.email },
+            { id: user.id, email: user.email, role_id: user.role_id, role: roleName },
             process.env.SECERET_KEY || "secretkey",
             { expiresIn: "1d" }
         );
@@ -59,7 +61,10 @@ exports.login = async (req, res) => {
             token: token,
             user: {
                 id: user.id,
-                email: user.email
+                email: user.email,
+                name: user.name,
+                role_id: user.role_id,
+                role: roleName
             }
         }))
     } catch (err) {
