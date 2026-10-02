@@ -1,0 +1,9 @@
+.env.DATABASE,
+    });
+
+    console.log("✅ MySQL Connected");
+    await conn.end();
+  } catch (err) {
+    console.error(err);
+  }
+})();
