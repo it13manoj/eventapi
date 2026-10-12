@@ -23,7 +23,7 @@ console.log({
 // }))
 
 app.use(cors({
-    origin: ["http://localhost:5173", "https://parakshtach.com","https://www.parakshtach.com"],
+    origin: ["http://localhost:5173", "http://129.121.134.1","https://129.121.134.1/"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"]
