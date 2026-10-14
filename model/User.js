@@ -53,6 +53,11 @@ const User = sequelize.define("users", {
         type: DataTypes.STRING,
         allowNull: true
     },
+    shift_hour: {
+        type: DataTypes.FLOAT,
+        allowNull: true,
+        defaultValue: 8
+    },
     base_pay: {
         type: DataTypes.INTEGER,
         allowNull: true

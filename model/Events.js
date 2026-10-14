@@ -89,7 +89,14 @@ const Events = sequelize.define("events", {
         defaultValue: "Pending",
         allowNull: false
     },
-
+    template_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+    },
+    template_name: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
 }, {
     timestamps: true,
     createdAt: "created_at",

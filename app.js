@@ -51,6 +51,8 @@ app.use("/api/v1/admin", admin.Companies)
 app.use("/api/v1/admin", admin.EventPayHistory)
 app.use("/api/v1/admin", admin.AgentOwner)
 app.use("/api/v1/admin", admin.VehicleMovementRoutes)
+app.use("/api/v1/admin", admin.Attendance)
+app.use("/api/v1/admin", admin.EventTemplate)
 
 
 

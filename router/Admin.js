@@ -10,7 +10,9 @@ const Companies = require("./Companies")
 const EventPayHistory = require("./EventPayHistory")
 const AgentOwner = require("./AgentOwner")
 const VehicleMovementRoutes = require("./VehicleMovementRoutes")
+const Attendance = require("./Attendance")
+const EventTemplate = require("./EventTemplate")
 
 module.exports ={
-    Category, SubCategory, Inventories, Events, WareHouse, VehicleType, Vehicle, TeamAssign, Companies, EventPayHistory, AgentOwner, VehicleMovementRoutes
+    Category, SubCategory, Inventories, Events, WareHouse, VehicleType, Vehicle, TeamAssign, Companies, EventPayHistory, AgentOwner, VehicleMovementRoutes, Attendance, EventTemplate
 }

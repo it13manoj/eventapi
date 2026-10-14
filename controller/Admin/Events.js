@@ -16,7 +16,8 @@ exports.create = async (req, res) => {
             c_name, vanus, doe, v_location, v_a_d, nodb, pob,
             tc, sr, amount, status,
             categories_id, sub_categories_id,
-            designName, bookedItems, stockDetails, eventDetails, id
+            designName, bookedItems, stockDetails, eventDetails, id,
+            template_id, template_name
         } = req.body;
         let event = id
         // ================= DESIGN =================
@@ -45,7 +46,9 @@ exports.create = async (req, res) => {
                     amount,
                     status,
                     categories_id,
-                    sub_categories_id
+                    sub_categories_id,
+                    template_id: template_id || null,
+                    template_name: template_name || null
                 },
                 {
                     where: { id: id },
@@ -68,7 +71,9 @@ exports.create = async (req, res) => {
                 amount,
                 status,
                 categories_id,
-                sub_categories_id
+                sub_categories_id,
+                template_id: template_id || null,
+                template_name: template_name || null
             }, { transaction: t });
         }
         // ================= EVENT =================
@@ -257,9 +262,11 @@ exports.getDesign = async (req, res) => {
 exports.update = async (req, res) => {
     try {
         const { id } = req.params
-        const { c_name, vanus, doe, v_location, v_a_d, nodb, pob, tc, sr, amount, status, width, height, quntites, categories_id, sub_categories_id } = req.body;
+        const { c_name, vanus, doe, v_location, v_a_d, nodb, pob, tc, sr, amount, status, width, height, quntites, categories_id, sub_categories_id, template_id, template_name } = req.body;
         const result = await Events.update({
-            c_name, vanus, doe, v_location, v_a_d, nodb, pob, tc, sr, amount, status, categories_id, sub_categories_id
+            c_name, vanus, doe, v_location, v_a_d, nodb, pob, tc, sr, amount, status, categories_id, sub_categories_id,
+            ...(template_id !== undefined ? { template_id } : {}),
+            ...(template_name !== undefined ? { template_name } : {})
         }, {
             where: {
                 id: id
@@ -455,14 +462,19 @@ exports.bookedItemsInStocked = async (req, res) => {
         COALESCE(SUM(be.horizontalPcs), 0) AS horizontal,
         COALESCE(SUM(be.qt), 0) AS quantities
     FROM booked_events be
-    WHERE DATE(be.event_end_Date) >= :formattedDate
+    JOIN events e ON e.id = be.event_id
+    WHERE e.status NOT IN ('3', '4', 'Finished', 'Event Finished', 'Complete', 'Completed', 'Cancelled', 'Cancelled/Postpone')
       AND be.categories_id = :catId
       AND be.subCategories_id = :subCatId
-      AND JSON_CONTAINS(be.stock_id, :stockId)
+      AND (
+        JSON_CONTAINS(be.stock_id, :stockId)
+        OR be.stock_id IS NULL
+        OR be.stock_id = ''
+        OR be.stock_id = '[]'
+      )
     `,
             {
                 replacements: {
-                    formattedDate,
                     catId,
                     subCatId,
                     stockId: JSON.stringify(Number(stockId))
@@ -497,6 +509,10 @@ exports.invoiceItems = async (req, res) => {
                 e.v_location,
                 e.amount AS event_base_amount,
                 e.status AS event_status,
+                e.template_id,
+                e.template_name,
+                et.name AS db_template_name,
+                et.total_price AS db_template_total_price,
                 be.id AS booked_event_id,
                 be.categories_id,
                 be.categories_name,
@@ -520,6 +536,8 @@ exports.invoiceItems = async (req, res) => {
             FROM events e
             LEFT JOIN booked_events be
                 ON be.event_id = e.id
+            LEFT JOIN event_templates et
+                ON et.id = e.template_id
             WHERE e.status != "4" AND e.status != "Cancelled"
             ORDER BY e.id DESC
             `,
@@ -606,6 +624,15 @@ exports.invoiceItems = async (req, res) => {
                 const vehiclesSubtotal = assignedVehicles.reduce((sum, v) => sum + v.totalCost, 0);
                 const paid = paidMap[row.id] || 0;
 
+                const templateName = row.template_name || row.db_template_name || (row.template_id ? `Template #${row.template_id}` : "");
+                const templatePrice = Number(
+                    row.event_base_amount !== null && row.event_base_amount !== undefined && Number(row.event_base_amount) > 0
+                        ? row.event_base_amount
+                        : (row.db_template_total_price || 0)
+                );
+                const hasTemplate = !!(row.template_id || (templateName && templateName.trim() !== "") || templatePrice > 0);
+                const initialItemsSubtotal = hasTemplate ? templatePrice : 0;
+
                 invoiceMap[row.id] = {
                     id: `INV-${row.id}`,
                     eventId: row.id,
@@ -615,9 +642,13 @@ exports.invoiceItems = async (req, res) => {
                     venue: row.vanus || "Venue",
                     mobile: "NA",
                     address: row.v_location || row.vanus || "Venue",
-                    itemsSubtotal: 0,
+                    templateId: row.template_id || null,
+                    templateName: templateName,
+                    templatePrice: templatePrice,
+                    hasTemplate: hasTemplate,
+                    itemsSubtotal: initialItemsSubtotal,
                     vehiclesSubtotal: vehiclesSubtotal,
-                    amount: vehiclesSubtotal,
+                    amount: initialItemsSubtotal + vehiclesSubtotal,
                     paidAmount: paid,
                     unpaidAmount: 0,
                     status: "Unpaid",
@@ -627,6 +658,8 @@ exports.invoiceItems = async (req, res) => {
             }
 
             if (row.booked_event_id) {
+                const isTpl = invoiceMap[row.id].hasTemplate;
+
                 const baseAmount = row.vprice && Number(row.vprice) > 0
                     ? Number(row.vprice)
                     : row.hprice && Number(row.hprice) > 0
@@ -639,7 +672,8 @@ exports.invoiceItems = async (req, res) => {
                         ? Number(row.horizontalPcs || 0)
                         : Number(row.qt || 0);
 
-                const lineTotal = baseAmount;
+                // If event uses a template, specific item prices are included in package and not billed individually
+                const lineTotal = isTpl ? 0 : baseAmount;
 
                 invoiceMap[row.id].items.push({
                     bookedEventId: row.booked_event_id,
@@ -648,21 +682,24 @@ exports.invoiceItems = async (req, res) => {
                     subCategoryId: row.subCategories_id,
                     subCategoryName: row.subCategories_name,
                     qty: qty || Number(row.qt || 1),
-                    vprice: row.vprice,
-                    hprice: row.hprice,
-                    sprice: row.price,
+                    vprice: isTpl ? 0 : row.vprice,
+                    hprice: isTpl ? 0 : row.hprice,
+                    sprice: isTpl ? 0 : row.price,
                     horizontalPcs: row.horizontalPcs,
                     verticalPcs: row.verticalPcs,
                     vertical: row.vertical,
                     horizontal: row.horizontal,
                     verticalUnit: row.verticalUnit,
                     horizontalUnit: row.horizontalUnit,
-                    rate: baseAmount,
-                    lineTotal: lineTotal
+                    rate: isTpl ? 0 : baseAmount,
+                    lineTotal: lineTotal,
+                    includedInTemplate: isTpl
                 });
 
-                invoiceMap[row.id].itemsSubtotal += lineTotal;
-                invoiceMap[row.id].amount += lineTotal;
+                if (!isTpl) {
+                    invoiceMap[row.id].itemsSubtotal += lineTotal;
+                    invoiceMap[row.id].amount += lineTotal;
+                }
             }
         });
 
