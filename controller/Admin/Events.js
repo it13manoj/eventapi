@@ -507,6 +507,7 @@ exports.invoiceItems = async (req, res) => {
                 e.doe,
                 e.vanus,
                 e.v_location,
+                e.tc AS transport_charges,
                 e.amount AS event_base_amount,
                 e.status AS event_status,
                 e.template_id,
@@ -625,13 +626,18 @@ exports.invoiceItems = async (req, res) => {
                 const paid = paidMap[row.id] || 0;
 
                 const templateName = row.template_name || row.db_template_name || (row.template_id ? `Template #${row.template_id}` : "");
-                const templatePrice = Number(
+                const templatePrice = Number(row.db_template_total_price || 0);
+                const eventCost = Number(
                     row.event_base_amount !== null && row.event_base_amount !== undefined && Number(row.event_base_amount) > 0
                         ? row.event_base_amount
-                        : (row.db_template_total_price || 0)
+                        : templatePrice
+                );
+                const transportCost = Number(
+                    row.transport_charges !== null && row.transport_charges !== undefined && !isNaN(Number(row.transport_charges))
+                        ? row.transport_charges
+                        : 0
                 );
                 const hasTemplate = !!(row.template_id || (templateName && templateName.trim() !== "") || templatePrice > 0);
-                const initialItemsSubtotal = hasTemplate ? templatePrice : 0;
 
                 invoiceMap[row.id] = {
                     id: `INV-${row.id}`,
@@ -646,9 +652,11 @@ exports.invoiceItems = async (req, res) => {
                     templateName: templateName,
                     templatePrice: templatePrice,
                     hasTemplate: hasTemplate,
-                    itemsSubtotal: initialItemsSubtotal,
+                    eventCost: eventCost,
+                    transportCost: transportCost,
+                    itemsSubtotal: 0,
                     vehiclesSubtotal: vehiclesSubtotal,
-                    amount: initialItemsSubtotal + vehiclesSubtotal,
+                    amount: eventCost + transportCost + vehiclesSubtotal,
                     paidAmount: paid,
                     unpaidAmount: 0,
                     status: "Unpaid",
@@ -658,13 +666,15 @@ exports.invoiceItems = async (req, res) => {
             }
 
             if (row.booked_event_id) {
-                const isTpl = invoiceMap[row.id].hasTemplate;
+                const vPrice = Number(row.vprice || 0);
+                const hPrice = Number(row.hprice || 0);
+                const sPrice = Number(row.price || 0);
 
-                const baseAmount = row.vprice && Number(row.vprice) > 0
-                    ? Number(row.vprice)
-                    : row.hprice && Number(row.hprice) > 0
-                        ? Number(row.hprice)
-                        : Number(row.price || 0);
+                const baseAmount = vPrice > 0
+                    ? vPrice
+                    : hPrice > 0
+                        ? hPrice
+                        : sPrice;
 
                 const qty = row.verticalUnit
                     ? Number(row.verticalPcs || 0)
@@ -672,8 +682,7 @@ exports.invoiceItems = async (req, res) => {
                         ? Number(row.horizontalPcs || 0)
                         : Number(row.qt || 0);
 
-                // If event uses a template, specific item prices are included in package and not billed individually
-                const lineTotal = isTpl ? 0 : baseAmount;
+                const lineTotal = baseAmount;
 
                 invoiceMap[row.id].items.push({
                     bookedEventId: row.booked_event_id,
@@ -682,24 +691,22 @@ exports.invoiceItems = async (req, res) => {
                     subCategoryId: row.subCategories_id,
                     subCategoryName: row.subCategories_name,
                     qty: qty || Number(row.qt || 1),
-                    vprice: isTpl ? 0 : row.vprice,
-                    hprice: isTpl ? 0 : row.hprice,
-                    sprice: isTpl ? 0 : row.price,
+                    vprice: vPrice,
+                    hprice: hPrice,
+                    sprice: sPrice,
                     horizontalPcs: row.horizontalPcs,
                     verticalPcs: row.verticalPcs,
                     vertical: row.vertical,
                     horizontal: row.horizontal,
                     verticalUnit: row.verticalUnit,
                     horizontalUnit: row.horizontalUnit,
-                    rate: isTpl ? 0 : baseAmount,
+                    rate: baseAmount,
                     lineTotal: lineTotal,
-                    includedInTemplate: isTpl
+                    includedInTemplate: false
                 });
 
-                if (!isTpl) {
-                    invoiceMap[row.id].itemsSubtotal += lineTotal;
-                    invoiceMap[row.id].amount += lineTotal;
-                }
+                invoiceMap[row.id].itemsSubtotal += lineTotal;
+                invoiceMap[row.id].amount += lineTotal;
             }
         });
 
