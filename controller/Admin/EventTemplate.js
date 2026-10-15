@@ -2,6 +2,32 @@ const EventTemplate = require("../../model/EventTemplate");
 const { ERROR } = require("../../Response/Error");
 const { SUCCESS } = require("../../Response/Success");
 
+const parseItemsHelper = (raw) => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      let parsed = JSON.parse(raw);
+      if (typeof parsed === "string") {
+        parsed = JSON.parse(parsed);
+      }
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === "object") return Object.values(parsed);
+    } catch (e) {
+      return [];
+    }
+  }
+  if (typeof raw === "object") return Object.values(raw);
+  return [];
+};
+
+const formatTemplate = (t) => {
+  if (!t) return null;
+  const data = t.toJSON ? t.toJSON() : { ...t };
+  data.items = parseItemsHelper(data.items);
+  return data;
+};
+
 // CREATE
 exports.create = async (req, res) => {
   try {
@@ -15,10 +41,10 @@ exports.create = async (req, res) => {
       name: String(name).trim(),
       total_price: total_price !== undefined && total_price !== null ? parseFloat(total_price) : 0.0,
       description: description || "",
-      items: Array.isArray(items) ? items : [],
+      items: parseItemsHelper(items),
     });
 
-    res.send(SUCCESS("Template created successfully!", template));
+    res.send(SUCCESS("Template created successfully!", formatTemplate(template)));
   } catch (error) {
     console.error("Error creating template:", error);
     res.status(500).send(ERROR(error.message));
@@ -31,7 +57,8 @@ exports.find = async (req, res) => {
     const templates = await EventTemplate.findAll({
       order: [["created_at", "DESC"]],
     });
-    res.send(SUCCESS("Templates fetched successfully!", templates));
+    const formatted = templates.map(formatTemplate);
+    res.send(SUCCESS("Templates fetched successfully!", formatted));
   } catch (error) {
     console.error("Error fetching templates:", error);
     res.status(500).send(ERROR(error.message));
@@ -48,7 +75,7 @@ exports.findByid = async (req, res) => {
       return res.status(404).send(ERROR("Template not found"));
     }
 
-    res.send(SUCCESS("Template fetched successfully!", template));
+    res.send(SUCCESS("Template fetched successfully!", formatTemplate(template)));
   } catch (error) {
     console.error("Error fetching template:", error);
     res.status(500).send(ERROR(error.message));
@@ -69,11 +96,11 @@ exports.updates = async (req, res) => {
     if (name !== undefined) template.name = String(name).trim();
     if (total_price !== undefined) template.total_price = parseFloat(total_price) || 0.0;
     if (description !== undefined) template.description = description;
-    if (items !== undefined) template.items = Array.isArray(items) ? items : [];
+    if (items !== undefined) template.items = parseItemsHelper(items);
 
     await template.save();
 
-    res.send(SUCCESS("Template updated successfully!", template));
+    res.send(SUCCESS("Template updated successfully!", formatTemplate(template)));
   } catch (error) {
     console.error("Error updating template:", error);
     res.status(500).send(ERROR(error.message));
