@@ -267,6 +267,56 @@ exports.getDesign = async (req, res) => {
     }
 }
 
+exports.findByDesign = async (req, res) => {
+    try {
+        const { designId } = req.params;
+        const { name } = req.query;
+
+        let targetDesignId = null;
+
+        if (designId && !isNaN(Number(designId)) && Number(designId) > 0) {
+            targetDesignId = Number(designId);
+        } else {
+            const queryName = name || designId;
+            if (queryName) {
+                const d = await Design.findOne({
+                    where: { design_name: queryName }
+                });
+                if (d) {
+                    targetDesignId = d.id;
+                }
+            }
+        }
+
+        if (!targetDesignId) {
+            return res.send(SUCCESS("No design found", null));
+        }
+
+        const latestEvent = await Events.findOne({
+            where: { design_id: targetDesignId },
+            order: [['id', 'DESC']]
+        });
+
+        if (!latestEvent) {
+            return res.send(SUCCESS("No event found for this design", null));
+        }
+
+        // Also fetch booked items for this event
+        const bookedItems = await BookedEvents.findAll({
+            where: { event_id: latestEvent.id },
+            order: [['id', 'ASC']]
+        });
+
+        const eventData = latestEvent.toJSON ? latestEvent.toJSON() : JSON.parse(JSON.stringify(latestEvent));
+        eventData.bookedItems = bookedItems;
+
+        res.send(SUCCESS("Event found for design", eventData));
+    } catch (error) {
+        console.error("Error in findByDesign:", error);
+        res.send(ERROR(error));
+    }
+};
+
 exports.update = async (req, res) => {
     try {
         const { id } = req.params;
