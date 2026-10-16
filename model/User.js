@@ -66,6 +66,14 @@ const User = sequelize.define("users", {
         type: DataTypes.BOOLEAN,
         allowNull: true
     },
+    insurance_number: {
+        type: DataTypes.STRING(50),
+        allowNull: true
+    },
+    adharcard_number: {
+        type: DataTypes.STRING(50),
+        allowNull: true
+    },
     adharcard_front: {
         type: DataTypes.STRING,
         allowNull: true

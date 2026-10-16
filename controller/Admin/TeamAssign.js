@@ -64,21 +64,22 @@ exports.find = async (req, res) => {
         const { id } = req.params;
         const event = await sequelize.query(
             `
-  SELECT
-    tms.id,
-      u.name,
-      u.contact,
-      u.gender,
-      u.email,
-      u.sifting_type
-  FROM users u
-  INNER JOIN team_assign_users tms
-      ON tms.user_id = u.id
-  INNER JOIN team_assigns ta
-      ON ta.id = tms.team_assign_id
-  WHERE ta.event_id = :eventId
-  ORDER BY u.name DESC
-  `,
+            SELECT DISTINCT
+                tms.id,
+                tms.event_id,
+                tms.user_id,
+                u.name,
+                u.contact,
+                u.gender,
+                u.email,
+                u.job,
+                u.sifting_type
+            FROM team_assign_users tms
+            INNER JOIN users u ON u.id = tms.user_id
+            LEFT JOIN team_assigns ta ON ta.id = tms.team_assign_id
+            WHERE (tms.event_id = :eventId OR ta.event_id = :eventId)
+            ORDER BY u.name ASC
+            `,
             {
                 replacements: { eventId: id },
                 type: sequelize.QueryTypes.SELECT,
@@ -135,22 +136,34 @@ exports.deleteAssignUsers = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const deleted = await TeamAssignUser.destroy({
-            where: {
-                id: id,
-            },
-        });
-
-        if (deleted === 0) {
+        const userAssign = await TeamAssignUser.findByPk(id);
+        if (!userAssign) {
             return res.status(404).json({
                 success: false,
                 message: "User assignment not found",
             });
         }
 
+        const teamAssignId = userAssign.team_assign_id;
+        const eventId = userAssign.event_id;
+
+        await userAssign.destroy();
+
+        // Check if there are any remaining users in this team/event
+        const remainingUsers = await TeamAssignUser.count({
+            where: {
+                ...(teamAssignId ? { team_assign_id: teamAssignId } : { event_id: eventId })
+            }
+        });
+
+        if (remainingUsers === 0 && teamAssignId) {
+            await TeamAssign.destroy({ where: { id: teamAssignId } });
+        }
+
         return res.status(200).json({
             success: true,
             message: "User assignment deleted successfully",
+            remaining: remainingUsers
         });
 
     } catch (error) {

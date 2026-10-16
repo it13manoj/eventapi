@@ -10,7 +10,7 @@ Route.get("/profile", (req, res) => {
 Route.get("/role", RoleController.getAllRoles);
 Route.post("/role/create", RoleController.createRole);
 Route.put("/role/:id", RoleController.updateRole);
-Route.delete("role/:id", RoleController.deleteRole);
+Route.delete("/role/:id", RoleController.deleteRole);
 
 
 

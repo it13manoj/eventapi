@@ -10,6 +10,14 @@ const Role = sequelize.define("roles", {
     role_name: {
         type: DataTypes.STRING,
         allowNull: false
+    },
+    description: {
+        type: DataTypes.STRING(255),
+        allowNull: true
+    },
+    permissions: {
+        type: DataTypes.JSON,
+        allowNull: true
     }
 }, {
     timestamps: true,

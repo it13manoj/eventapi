@@ -10,8 +10,10 @@ Route.put("/teamAssign/update/:id", updateTeamAssign)
 Route.get("/teamAssign/find/:id",find)
 Route.get("/teamAssign/findByUserId/:id",findByUserId)
 Route.get("/teamAssign/install/undinstall/:id",findInstallUnInstallDate)
-Route.delete("/teamAssign/deleteAssignUsers/:id", deleteAssignUsers)
-Route.delete("/teamAssign/delete/:id", deleteTeamAssign)
+Route.delete("/teamAssign/deleteAssignUsers/:id", deleteAssignUsers);
+Route.delete("/teamAssignUser/delete/:id", deleteAssignUsers);
+Route.delete("/teamAssign/user/delete/:id", deleteAssignUsers);
+Route.delete("/teamAssign/delete/:id", deleteTeamAssign);
 
 
 

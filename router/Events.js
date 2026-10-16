@@ -1,5 +1,5 @@
 const express = require("express");
-const { create,invoiceItems, update, find, findByPk, updateStatus, calculate , getDesign, findEventBookedItems, getBookedInventroyDate, ItemBooksDetails, bookedItemsInStocked, deletes} = require("../controller/Admin/Events");
+const { create,invoiceItems, updateInvoiceDetails, update, find, findByPk, updateStatus, calculate , getDesign, findEventBookedItems, getBookedInventroyDate, ItemBooksDetails, bookedItemsInStocked, deletes} = require("../controller/Admin/Events");
 
 const Route = express.Router();
 
@@ -17,6 +17,7 @@ Route.get("/Events/bookedEvents/itemsDate/:date/:catId/:subCatId", getBookedInve
 Route.get("/Events/bookedEvents/complete", ItemBooksDetails)
 Route.get("/Events/bookedEvents/bookedItemsInStocked/:date/:catId/:subCatId/:stockId", bookedItemsInStocked)
 Route.get("/Events/bookedEvents/invoices", invoiceItems)
+Route.put("/Events/invoice-details/:id", updateInvoiceDetails)
 
 
 module.exports = Route

@@ -145,6 +145,11 @@ const BookedEvents = sequelize.define(
     event_end_Date: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    status: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      defaultValue: "0"
     }
   },
   {

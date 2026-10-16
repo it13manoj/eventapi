@@ -15,6 +15,7 @@ Route.get("/Inverntory/calculate/:catId/:scatId", calculate)
 Route.get("/Inverntory/items/calculate/:id", countsItems)
 Route.get("/Inverntory/items/find/:id", Items)
 Route.get("/Inverntory/items/eventStocks/:date/:catId/:scatId", eventStocks)
+Route.get("/Inverntory/getDistances", geoDistanceAPI)
 Route.get("/Inverntory/getDistances/:from/:to", geoDistanceAPI)
 
 module.exports = Route

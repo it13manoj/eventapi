@@ -40,7 +40,7 @@ exports.login = async (req, res) => {
         const { email, password } = req.body;
         const user = await User.findOne({
             where: { email: email },
-            include: [{ model: Role, as: "role", attributes: ["id", "role_name"] }]
+            include: [{ model: Role, as: "role", attributes: ["id", "role_name", "description", "permissions"] }]
         });
 
         if (!user) {
@@ -64,7 +64,8 @@ exports.login = async (req, res) => {
                 email: user.email,
                 name: user.name,
                 role_id: user.role_id,
-                role: roleName
+                role: roleName,
+                permissions: user.role?.permissions || null
             }
         }))
     } catch (err) {
@@ -125,7 +126,7 @@ exports.findByPk = async (req, res) => {
         const { id } = req.user;
 
         const usersRecords = await User.findByPk(id, {
-            include: [{ model: Role, as: "role", attributes: ["id", "role_name"] }],
+            include: [{ model: Role, as: "role", attributes: ["id", "role_name", "description", "permissions"] }],
             attributes: { exclude: ["password"] }
         });
 
@@ -213,7 +214,7 @@ exports.updateMyProfile = async (req, res) => {
         await user.update(updateData);
 
         const updatedUser = await User.findByPk(id, {
-            include: [{ model: Role, as: "role", attributes: ["id", "role_name"] }],
+            include: [{ model: Role, as: "role", attributes: ["id", "role_name", "description", "permissions"] }],
             attributes: { exclude: ["password"] }
         });
 
@@ -234,7 +235,6 @@ const generateAutoPassword = (name, dobString) => {
   const namePart = cleanName.padEnd(4, "x").substring(0, 4);
   let day = "01";
   let month = "01";
-
   if (dobString) {
     const dateObj = new Date(dobString);
     if (!isNaN(dateObj.getTime())) {
@@ -255,7 +255,7 @@ exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.params.id;
     const user = await User.findByPk(userId, {
-      include: [{ model: Role, as: "role", attributes: ["id", "role_name"] }],
+      include: [{ model: Role, as: "role", attributes: ["id", "role_name", "description", "permissions"] }],
       attributes: { exclude: ["password"] },
     });
 
@@ -290,6 +290,8 @@ exports.updateUserProfile = async (req, res) => {
       shift_hour,
       base_pay,
       insurance,
+      insurance_number,
+      adharcard_number,
       role_id,
       address,
       city,
@@ -323,6 +325,8 @@ exports.updateUserProfile = async (req, res) => {
       shift_hour: shift_hour ? parseFloat(shift_hour) : (user?.shift_hour || 8),
       base_pay: base_pay ? parseInt(base_pay) : null,
       insurance: insurance === "true" || insurance === true,
+      insurance_number: insurance_number !== undefined ? (insurance_number ? String(insurance_number).trim() : null) : user?.insurance_number,
+      adharcard_number: adharcard_number !== undefined ? (adharcard_number ? String(adharcard_number).trim() : null) : user?.adharcard_number,
       role_id: role_id ? parseInt(role_id) : 1,
       address,
       city,
@@ -386,6 +390,8 @@ exports.createUserProfile = async (req, res) => {
       shift_hour,
       base_pay,
       insurance,
+      insurance_number,
+      adharcard_number,
       role_id,
       address,
       city,
@@ -444,6 +450,8 @@ exports.createUserProfile = async (req, res) => {
       shift_hour: shift_hour ? parseFloat(shift_hour) : 8,
       base_pay: base_pay ? parseInt(base_pay) : null,
       insurance: insurance === "true" || insurance === true,
+      insurance_number: insurance_number ? String(insurance_number).trim() : null,
+      adharcard_number: adharcard_number ? String(adharcard_number).trim() : null,
       role_id: role_id ? parseInt(role_id) : 1,
       address: address || null,
       city: city || null,

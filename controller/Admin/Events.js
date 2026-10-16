@@ -30,6 +30,9 @@ exports.create = async (req, res) => {
 
         const designId = design.id;
 
+        const safeCategoriesId = categories_id && Number(categories_id) > 0 ? Number(categories_id) : null;
+        const safeSubCategoriesId = sub_categories_id && Number(sub_categories_id) > 0 ? Number(sub_categories_id) : null;
+
         if (id != null) {
             await Events.update(
                 {
@@ -45,9 +48,9 @@ exports.create = async (req, res) => {
                     sr,
                     amount,
                     status,
-                    categories_id,
-                    sub_categories_id,
-                    template_id: template_id || null,
+                    categories_id: safeCategoriesId,
+                    sub_categories_id: safeSubCategoriesId,
+                    template_id: template_id && Number(template_id) > 0 ? Number(template_id) : null,
                     template_name: template_name || null
                 },
                 {
@@ -70,63 +73,64 @@ exports.create = async (req, res) => {
                 sr,
                 amount,
                 status,
-                categories_id,
-                sub_categories_id,
-                template_id: template_id || null,
+                categories_id: safeCategoriesId,
+                sub_categories_id: safeSubCategoriesId,
+                template_id: template_id && Number(template_id) > 0 ? Number(template_id) : null,
                 template_name: template_name || null
             }, { transaction: t });
         }
         // ================= EVENT =================
 
-
-
         const eventId = id != null ? id : event.id;
 
         // ================= ITEMS =================
+        const safeBookedItems = Array.isArray(bookedItems) ? bookedItems : [];
+        const itemsPayload = safeBookedItems
+            .filter((item) => item && (item.categories?.id || item.subCategories?.id))
+            .map((item) => ({
+                event_id: eventId,
 
-        const itemsPayload = bookedItems.map((item) => ({
-            event_id: eventId,
+                categories_id: item.categories?.id || null,
+                categories_name: item.categories?.name || "",
 
-            categories_id: item.categories.id,
-            categories_name: item.categories.name,
+                subCategories_id: item.subCategories?.id || null,
+                subCategories_name: item.subCategories?.name || "",
 
-            subCategories_id: item.subCategories.id,
-            subCategories_name: item.subCategories.name,
+                qt: item.subCategories?.is_enable
+                    ? 0
+                    : item.inputs?.value || 0,
 
-            qt: item.subCategories.is_enable
-                ? 0
-                : item.inputs.value || 0,
+                price: item.subCategories?.is_enable
+                    ? 0
+                    : item.inputs?.price || 0,
+                vprice: item.inputs?.vprice || 0,
 
-            price: item.subCategories.is_enable
-                ? 0
-                : item.inputs.price || 0,
-            vprice: item.inputs.vprice || 0,
+                hprice: item.inputs?.hprice || 0,
 
-            hprice: item.inputs.hprice || 0,
+                vertical: item.inputs?.vertical || false,
+                horizontal: item.inputs?.horizontal || false,
 
-            vertical: item.inputs.vertical || false,
-            horizontal: item.inputs.horizontal || false,
+                verticalValue:
+                    item.inputs?.verticalValue || null,
 
-            verticalValue:
-                item.inputs.verticalValue || null,
+                verticalPcs:
+                    item.inputs?.verticalPcs || 0,
 
-            verticalPcs:
-                item.inputs.verticalPcs || 0,
+                verticalUnit:
+                    item.inputs?.verticalUnit || null,
 
-            verticalUnit:
-                item.inputs.verticalUnit || null,
+                horizontalValue:
+                    item.inputs?.horizontalValue || null,
 
-            horizontalValue:
-                item.inputs.horizontalValue || null,
+                horizontalPcs:
+                    item.inputs?.horizontalPcs || 0,
 
-            horizontalPcs:
-                item.inputs.horizontalPcs || 0,
-
-            horizontalUnit:
-                item.inputs.horizontalUnit || null,
-            evetn_start_date: doe,
-            event_end_Date: nodb
-        }));
+                horizontalUnit:
+                    item.inputs?.horizontalUnit || null,
+                evetn_start_date: doe,
+                event_end_Date: nodb,
+                status: status || "0"
+            }));
 
         if (id != null) {
             await BookedEvents.destroy({
@@ -137,14 +141,17 @@ exports.create = async (req, res) => {
             });
         }
 
-        await BookedEvents.bulkCreate(
-            itemsPayload,
-            { transaction: t, logging: console.log }
-        );
+        if (itemsPayload.length > 0) {
+            await BookedEvents.bulkCreate(
+                itemsPayload,
+                { transaction: t, logging: console.log }
+            );
+        }
 
         // ================= STOCK UPDATE =================
-
-        for (const item of stockDetails) {
+        const safeStockDetails = Array.isArray(stockDetails) ? stockDetails : [];
+        for (const item of safeStockDetails) {
+            if (!item || !item.Categories || !item.SubCategoreis) continue;
 
             await BookedEvents.update(
                 {
@@ -163,8 +170,9 @@ exports.create = async (req, res) => {
         }
 
         // ================= EVENT UPDATE =================
-
-        for (const item of eventDetails) {
+        const safeEventDetails = Array.isArray(eventDetails) ? eventDetails : [];
+        for (const item of safeEventDetails) {
+            if (!item || !item.Categories || !item.SubCategoreis) continue;
 
             await BookedEvents.update(
                 {
@@ -261,18 +269,25 @@ exports.getDesign = async (req, res) => {
 
 exports.update = async (req, res) => {
     try {
-        const { id } = req.params
+        const { id } = req.params;
         const { c_name, vanus, doe, v_location, v_a_d, nodb, pob, tc, sr, amount, status, width, height, quntites, categories_id, sub_categories_id, template_id, template_name } = req.body;
+        const safeCatId = categories_id && Number(categories_id) > 0 ? Number(categories_id) : null;
+        const safeSubCatId = sub_categories_id && Number(sub_categories_id) > 0 ? Number(sub_categories_id) : null;
         const result = await Events.update({
-            c_name, vanus, doe, v_location, v_a_d, nodb, pob, tc, sr, amount, status, categories_id, sub_categories_id,
-            ...(template_id !== undefined ? { template_id } : {}),
-            ...(template_name !== undefined ? { template_name } : {})
+            c_name, vanus, doe, v_location, v_a_d, nodb, pob, tc, sr, amount, status, width, height, quntites,
+            categories_id: safeCatId,
+            sub_categories_id: safeSubCatId,
+            ...(template_id !== undefined ? { template_id: template_id && Number(template_id) > 0 ? Number(template_id) : null } : {}),
+            ...(template_name !== undefined ? { template_name: template_name || null } : {})
         }, {
             where: {
                 id: id
             }
-        })
-        res.send(SUCCESS("Successfully Event update", result))
+        });
+        if (status !== undefined) {
+            await BookedEvents.update({ status }, { where: { event_id: id } });
+        }
+        res.send(SUCCESS("Successfully Event update", result));
     } catch (error) {
         res.send(ERROR(error))
     }
@@ -282,17 +297,26 @@ exports.update = async (req, res) => {
 exports.find = async (req, res) => {
     try {
         const result = await Events.findAll({
-            // include:[{
-            //          model: BookedEvents,
-            //          as : "event_id"
-            // }],
+            attributes: {
+                include: [
+                    [
+                        sequelize.literal(`(
+                            SELECT COUNT(DISTINCT tmu.id)
+                            FROM team_assign_users AS tmu
+                            LEFT JOIN team_assigns AS ta ON ta.id = tmu.team_assign_id
+                            WHERE tmu.event_id = events.id OR ta.event_id = events.id
+                        )`),
+                        'team_count'
+                    ]
+                ]
+            },
             order: [['id', 'DESC']]
-        })
-        res.send(SUCCESS("Records", result))
+        });
+        res.send(SUCCESS("Records", result));
     } catch (error) {
-        res.send(ERROR(error))
+        res.send(ERROR(error));
     }
-}
+};
 
 exports.findByPk = async (req, res) => {
     try {
@@ -307,13 +331,18 @@ exports.findByPk = async (req, res) => {
 exports.updateStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { status } = req.body
+        const { status } = req.body;
         const result = await Events.update({
             status
         }, {
             where: { id: id }
-        })
-        res.send(SUCCESS("Successfully Event update", result))
+        });
+        await BookedEvents.update({
+            status
+        }, {
+            where: { event_id: id }
+        });
+        res.send(SUCCESS("Successfully Event update", result));
     } catch (error) {
         res.send(ERROR(error))
     }
@@ -381,13 +410,21 @@ exports.calculate = async (req, res) => {
 exports.getBookedInventroyDate = async (req, res) => {
     try {
         const { date, catId, subCatId } = req.params;
-        const endDate = new Date(date);
-        console.log(date, catId, subCatId)
+        console.log("getBookedInventroyDate params:", { date, catId, subCatId });
 
-        const formattedDate = new Date(endDate)
-            .toISOString()
-            .split("T")[0];
-
+        let formattedDate = "";
+        if (date) {
+            if (date.includes("T")) {
+                formattedDate = date.split("T")[0];
+            } else if (date.includes(" ")) {
+                formattedDate = date.split(" ")[0];
+            } else {
+                formattedDate = date;
+            }
+        }
+        if (!formattedDate) {
+            formattedDate = new Date().toISOString().split("T")[0];
+        }
 
         const result = await sequelize.query(
             `
@@ -397,7 +434,8 @@ exports.getBookedInventroyDate = async (req, res) => {
       e.nodb,
       e.doe, 
       e.vanus,  
-      e.v_location,   
+      e.v_location,
+      e.status,
       be.id AS booked_event_id,
       be.categories_id,
       be.categories_name,
@@ -413,6 +451,8 @@ exports.getBookedInventroyDate = async (req, res) => {
       be.horizontalUnit,
       be.qt,
       be.event_id,
+      be.event_stock_id,
+      be.evnt_qt,
       be.created_at,
       be.updated_at
 
@@ -421,9 +461,15 @@ exports.getBookedInventroyDate = async (req, res) => {
     INNER JOIN booked_events be
       ON be.event_id = e.id
 
-    WHERE DATE(e.nodb) = :formattedDate
-      AND be.categories_id = :catId
+    WHERE be.categories_id = :catId
       AND be.subCategories_id = :subCatId
+      AND e.status NOT IN ('5', '6', 'Cancelled', 'Postpone', 'Cancelled/Postpone')
+      AND (
+        DATE(e.nodb) <= :formattedDate
+        OR e.status IN ('4', 'Finished', 'Event Finished', 'Complete', 'Completed')
+        OR DATE(e.nodb) = :formattedDate
+      )
+    ORDER BY e.nodb DESC, e.id DESC
   `,
             {
                 replacements: {
@@ -435,14 +481,12 @@ exports.getBookedInventroyDate = async (req, res) => {
             }
         );
 
-        console.log(result)
-
-
-        res.send(SUCCESS("Successfully Event update", result))
+        res.send(SUCCESS("Successfully fetched events stock", result));
     } catch (error) {
-        res.send(ERROR(error))
+        console.error("getBookedInventroyDate error:", error);
+        res.send(ERROR(error.message || error));
     }
-}
+};
 
 
 exports.bookedItemsInStocked = async (req, res) => {
@@ -463,7 +507,7 @@ exports.bookedItemsInStocked = async (req, res) => {
         COALESCE(SUM(be.qt), 0) AS quantities
     FROM booked_events be
     JOIN events e ON e.id = be.event_id
-    WHERE e.status NOT IN ('3', '4', 'Finished', 'Event Finished', 'Complete', 'Completed', 'Cancelled', 'Cancelled/Postpone')
+    WHERE e.status NOT IN ('4', '5', '6', 'Finished', 'Event Finished', 'Complete', 'Completed', 'Cancelled', 'Postpone', 'Cancelled/Postpone')
       AND be.categories_id = :catId
       AND be.subCategories_id = :subCatId
       AND (
@@ -512,6 +556,12 @@ exports.invoiceItems = async (req, res) => {
                 e.status AS event_status,
                 e.template_id,
                 e.template_name,
+                e.partner_name,
+                e.partner_gst,
+                e.partner_phone,
+                e.partner_address,
+                e.invoice_notes,
+                e.gst_rate,
                 et.name AS db_template_name,
                 et.total_price AS db_template_total_price,
                 be.id AS booked_event_id,
@@ -539,7 +589,7 @@ exports.invoiceItems = async (req, res) => {
                 ON be.event_id = e.id
             LEFT JOIN event_templates et
                 ON et.id = e.template_id
-            WHERE e.status != "4" AND e.status != "Cancelled"
+            WHERE e.status NOT IN ('5', 'Cancelled')
             ORDER BY e.id DESC
             `,
             {
@@ -648,6 +698,12 @@ exports.invoiceItems = async (req, res) => {
                     venue: row.vanus || "Venue",
                     mobile: "NA",
                     address: row.v_location || row.vanus || "Venue",
+                    partnerName: row.partner_name || "",
+                    partnerGst: row.partner_gst || "",
+                    partnerPhone: row.partner_phone || "",
+                    partnerAddress: row.partner_address || "",
+                    invoiceNotes: row.invoice_notes || "",
+                    gstRate: Number(row.gst_rate || 0),
                     templateId: row.template_id || null,
                     templateName: templateName,
                     templatePrice: templatePrice,
@@ -726,6 +782,40 @@ exports.invoiceItems = async (req, res) => {
 
     } catch (error) {
         console.error(error);
+        res.send(ERROR(error));
+    }
+};
+
+exports.updateInvoiceDetails = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            partner_name,
+            partner_gst,
+            partner_phone,
+            partner_address,
+            invoice_notes,
+            gst_rate
+        } = req.body;
+
+        const cleanId = String(id).replace("INV-", "");
+        const event = await Events.findByPk(cleanId);
+        if (!event) {
+            return res.send(ERROR("Event not found"));
+        }
+
+        await event.update({
+            partner_name: partner_name !== undefined ? (partner_name ? String(partner_name).trim() : null) : event.partner_name,
+            partner_gst: partner_gst !== undefined ? (partner_gst ? String(partner_gst).trim().toUpperCase() : null) : event.partner_gst,
+            partner_phone: partner_phone !== undefined ? (partner_phone ? String(partner_phone).trim() : null) : event.partner_phone,
+            partner_address: partner_address !== undefined ? (partner_address ? String(partner_address).trim() : null) : event.partner_address,
+            invoice_notes: invoice_notes !== undefined ? (invoice_notes ? String(invoice_notes).trim() : null) : event.invoice_notes,
+            gst_rate: gst_rate !== undefined ? Number(gst_rate || 0) : event.gst_rate
+        });
+
+        res.send(SUCCESS("Invoice and Partner details updated successfully", event));
+    } catch (error) {
+        console.error("updateInvoiceDetails error:", error);
         res.send(ERROR(error));
     }
 };

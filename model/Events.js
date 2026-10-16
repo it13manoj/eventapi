@@ -57,7 +57,7 @@ const Events = sequelize.define("events", {
     },
     categories_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
         references: {
             model: Category,
             key: "id",
@@ -65,7 +65,7 @@ const Events = sequelize.define("events", {
     },
     sub_categories_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
         references: {
             model: SubCategory,
             key: "id",
@@ -85,8 +85,8 @@ const Events = sequelize.define("events", {
     },
 
     status: {
-        type: DataTypes.STRING,
-        defaultValue: "Pending",
+        type: DataTypes.STRING(50),
+        defaultValue: "0",
         allowNull: false
     },
     template_id: {
@@ -96,6 +96,31 @@ const Events = sequelize.define("events", {
     template_name: {
         type: DataTypes.STRING,
         allowNull: true
+    },
+    partner_name: {
+        type: DataTypes.STRING(255),
+        allowNull: true
+    },
+    partner_gst: {
+        type: DataTypes.STRING(50),
+        allowNull: true
+    },
+    partner_phone: {
+        type: DataTypes.STRING(50),
+        allowNull: true
+    },
+    partner_address: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    },
+    invoice_notes: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    },
+    gst_rate: {
+        type: DataTypes.FLOAT,
+        allowNull: true,
+        defaultValue: 0
     },
 }, {
     timestamps: true,
